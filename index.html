@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trình biên dịch C/C++ Online (CodeMirror)</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/theme/dracula.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/edit/matchbrackets.min.css">
+
+    <style>
+        /* --- CSS Cơ bản --- */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            margin: 0; /* Xóa margin mặc định */
+            padding: 15px;
+            background-color: #f0f2f5;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh; /* Chiều cao tối thiểu bằng màn hình */
+            box-sizing: border-box; /* Padding không làm tăng kích thước */
+        }
+
+        .container {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            flex-grow: 1; /* Chiếm không gian còn lại */
+            display: flex;
+            flex-direction: column;
+            max-width: 1200px; /* Giới hạn chiều rộng */
+            width: 100%; /* Chiếm toàn bộ chiều rộng đến max-width */
+            margin: 0 auto; /* Căn giữa container */
+            box-sizing: border-box;
+        }
+
+        h1 {
+            text-align: center;
+            color: #1d2129;
+            margin-top: 0;
+            margin-bottom: 25px;
+            font-size: 1.8em;
+        }
+
+        /* --- Khu vực điều khiển --- */
+        .controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+         .control-group-right {
+            display: flex;
+            align-items: center;
+            gap: 10px; /* Khoảng cách giữa các nút bên phải */
+         }
+
+        label {
+            font-weight: 600;
+            color: #4b4f56;
+            font-size: 0.95em;
+        }
+
+        select, button {
+            padding: 9px 14px;
+            border: 1px solid #ccd0d5;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.2s ease, border-color 0.2s ease;
+            background-color: #f5f6f7;
+        }
+        select:focus, button:focus {
+             outline: none;
+             border-color: #007bff;
+             box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+        }
+
+        select {
+             min-width: 90px;
+             appearance: none; /* Ẩn giao diện mặc định */
+             background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23007bff%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E');
+             background-repeat: no-repeat;
+             background-position: right 10px top 50%;
+             background-size: .65em auto;
+             padding-right: 30px; /* Tạo không gian cho mũi tên */
+        }
+        select:hover {
+            border-color: #adb5bd;
+        }
+
+        button {
+            color: white;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-weight: 500;
+        }
+
+        #runButton {
+             background-color: #28a745; /* Màu xanh lá */
+        }
+        #runButton:hover:not(:disabled) {
+            background-color: #218838;
+        }
+
+        #clearButton {
+            background-color: #6c757d; /* Màu xám */
+            color: white;
+        }
+         #clearButton:hover:not(:disabled) {
+            background-color: #5a6268;
+        }
+
+        button:disabled {
+            background-color: #e9ecef;
+            color: #6c757d;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        /* --- Trình soạn thảo CodeMirror --- */
+        .editor-container {
+            margin-bottom: 20px;
+            flex-grow: 1;
+            display: flex; /* Cần thiết để CodeMirror có thể fill height 100% */
+            min-height: 300px; /* Chiều cao tối thiểu */
+            position: relative; /* Cho các phần tử con định vị tuyệt đối nếu cần */
+            border: 1px solid #ccd0d5;
+            border-radius: 6px;
+            overflow: hidden; /* Đảm bảo bo tròn được áp dụng cho nội dung bên trong */
+            background-color: #282a36; /* *** NEW: Đặt màu nền Dracula cho container *** */
+        }
+
+        .CodeMirror {
+            /* Không cần set border ở đây vì đã có ở container */
+            /* Không cần set background ở đây nữa vì container đã có */
+            border-radius: 0; /* Bỏ radius ở đây để không xung đột với container */
+            font-size: 14px;
+            height: 100% !important; /* Quan trọng: Để CodeMirror fill container */
+            flex-grow: 1; /* Để nó chiếm hết không gian flex trong container */
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+            /* Ensure CodeMirror itself doesn't have a background that might override the container's */
+             background-color: transparent !important; /* Đảm bảo nền trong suốt để thấy nền container */
+        }
+
+        /* Style cho gutter (số dòng) - Generic */
+        .CodeMirror-gutters {
+            /* Remove default light background to allow theme background */
+            background-color: transparent; /* Bỏ màu nền mặc định */
+            border-right: 1px solid #44475a; /* Điều chỉnh màu border gutter cho hợp theme tối */
+        }
+        .CodeMirror-linenumber {
+            color: #6272a4; /* Màu số dòng mặc định của Dracula */
+            padding: 0 5px 0 10px !important; /* Căn lề số dòng */
+        }
+
+        /* Theme Dracula Specific Overrides (nếu cần) */
+        .cm-s-dracula { /* Áp dụng cho toàn bộ editor khi theme là dracula */
+             color: #f8f8f2; /* Màu chữ chính của Dracula */
+        }
+        /* Gutter của Dracula */
+        .cm-s-dracula .CodeMirror-gutters {
+             background: #282a36 !important; /* Đảm bảo gutter có nền Dracula */
+             border-right: 0px; /* Theme Dracula không có border phải ở gutter */
+        }
+        .cm-s-dracula .CodeMirror-linenumber {
+             color: #6D8A88; /* Màu số dòng cụ thể của Dracula */
+        }
+        /* Các màu syntax highlighting khác của Dracula sẽ được áp dụng từ dracula.min.css */
+
+
+        /* --- Khu vực Output --- */
+        .output-container {
+            margin-top: 15px; /* Khoảng cách với editor */
+            border: 1px solid #ccd0d5;
+            border-radius: 6px;
+            background-color: #f5f6f7;
+            display: flex;
+            flex-direction: column;
+            min-height: 100px; /* Chiều cao tối thiểu output */
+        }
+
+        .output-header {
+            background-color: #e9ecef;
+            padding: 10px 15px;
+            border-bottom: 1px solid #ccd0d5;
+            border-top-left-radius: 6px;
+            border-top-right-radius: 6px;
+        }
+
+        .output-header h3 {
+            margin: 0;
+            font-size: 1em;
+            font-weight: 600;
+            color: #4b4f56;
+        }
+
+        #output {
+            padding: 15px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+            background-color: #1e1e1e; /* Màu nền tối cho output */
+            color: #d4d4d4;      /* Màu chữ sáng */
+            flex-grow: 1; /* Chiếm không gian trong container */
+            border-bottom-left-radius: 6px;
+            border-bottom-right-radius: 6px;
+            overflow-x: auto;
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+        #output.error-output {
+            color: #ff7b72; /* Màu đỏ nhạt cho lỗi */
+        }
+        #output.invalid-version-error {
+            color: #ffd700; /* Màu vàng đậm cho cảnh báo version */
+            background-color: #3a3a2b;
+        }
+
+        /* --- Thông báo trạng thái --- */
+        #statusMessage {
+            padding: 10px 15px;
+            margin-bottom: 15px;
+            border-radius: 6px;
+            font-size: 0.9em;
+            display: none; /* Ẩn mặc định */
+            text-align: center;
+        }
+        #statusMessage.info {
+            background-color: #e7f3ff;
+            color: #00529b;
+            border: 1px solid #b8d7ff;
+        }
+        #statusMessage.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        #statusMessage.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        /* --- Spinner --- */
+        .loader {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #FFF;
+            border-bottom-color: transparent;
+            border-radius: 50%;
+            display: none; /* Ẩn ban đầu */
+            box-sizing: border-box;
+            animation: rotation 1s linear infinite;
+        }
+        button.running .loader {
+            display: inline-block; /* Hiện khi đang chạy */
+        }
+        button.running .run-icon {
+            display: none; /* Ẩn icon play khi đang chạy */
+        }
+        @keyframes rotation {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* --- Footer --- */
+        .footer {
+            text-align: center;
+            margin-top: 25px;
+            font-size: 0.85em;
+            color: #606770;
+        }
+        .footer p {
+            margin: 5px 0;
+        }
+        .footer a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        .footer a:hover {
+            text-decoration: underline;
+        }
+        .author {
+            font-weight: bold;
+        }
+        .api-note {
+             font-size: 0.9em;
+        }
+         .runtime-warning {
+             font-style: italic;
+             color: #888;
+         }
+
+         /* Responsive adjustments */
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            .container {
+                padding: 15px;
+            }
+            .controls {
+                flex-direction: column;
+                align-items: stretch; /* Các control group chiếm full width */
+            }
+            .control-group-right {
+                justify-content: center; /* Căn giữa các nút */
+                width: 100%; /* Chiếm full width để các nút bên trong có thể căn chỉnh */
+                flex-wrap: wrap; /* Cho phép nút xuống dòng nếu không đủ chỗ */
+            }
+             h1 {
+                 font-size: 1.5em;
+             }
+             button, select {
+                 /* Adjust button/select width slightly less than 100% on small screens if needed, or keep 100% */
+                 width: 100%; /* Nút/Select chiếm full width */
+                 box-sizing: border-box;
+                 justify-content: center; /* Căn giữa nội dung nút */
+                 margin-bottom: 5px; /* Add some space between stacked controls */
+             }
+             .control-group {
+                 justify-content: space-between; /* Label và select cách xa nhau */
+                 width: 100%; /* Ensure control group takes full width */
+                 margin-bottom: 5px;
+             }
+             .control-group-right button {
+                 width: calc(50% - 5px); /* Make Run/Clear buttons roughly half-width with a gap */
+             }
+             .control-group-right button:first-child {
+                 margin-right: 10px; /* Space between Clear and Run */
+             }
+
+             .CodeMirror {
+                 font-size: 13px;
+             }
+             #output {
+                 font-size: 0.85em;
+             }
+        }
+         /* Responsive adjustment for slightly larger screens where controls might wrap awkwardly */
+         @media (max-width: 768px) and (min-width: 601px) {
+            .controls {
+                 gap: 10px; /* Reduce gap slightly */
+             }
+            .control-group-right {
+                 margin-left: auto; /* Push right group to the right */
+             }
+         }
+
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Trình biên dịch C/C++ Online</h1>
+
+    <div class="controls">
+        <div class="control-group">
+            <label for="language">Ngôn ngữ:</label>
+            <select id="language">
+                <option value="cpp">C++</option>
+                <option value="c">C</option>
+            </select>
+        </div>
+         <div class="control-group-right">
+             <button id="clearButton">
+                 🧹 Clear Code
+             </button>
+            <button id="runButton">
+                <span id="runSpinner" class="loader"></span>
+                <span class="run-icon">▶</span> 
+                <span id="runButtonText">Run Code</span>
+            </button>
+        </div>
+    </div>
+
+    <div id="statusMessage"></div>
+
+    <div class="editor-container">
+        <!-- Textarea gốc, CodeMirror sẽ thay thế nó -->
+        <textarea id="code" placeholder="Nhập code C/C++ của bạn ở đây..." spellcheck="false"></textarea>
+    </div>
+
+    <div class="output-container">
+        <div class="output-header">
+            <h3>Kết quả:</h3>
+        </div>
+        <pre id="output">Chưa có kết quả...</pre>
+    </div>
+
+    <div class="footer">
+        <p>Design by <span class="author">Trác Tuấn Kiệt</span> | Sử dụng Piston API</p>
+        <p class="api-note">
+            <a href="https://github.com/engineer-man/piston" target="_blank" rel="noopener noreferrer">Piston API</a> |
+            <a href="https://emkc.org/api/v2/piston/runtimes" target="_blank" rel="noopener noreferrer" id="runtimeLink">Xem Runtimes Hỗ Trợ</a>
+            <span class="runtime-warning"><-- Tự động tìm phiên bản mới nhất.</span>
+        </p>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/mode/clike/clike.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/edit/closebrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.15/addon/edit/matchbrackets.min.js"></script>
+
+
+<script>
+    // --- JavaScript ---
+    const languageSelect = document.getElementById('language');
+    const codeArea = document.getElementById('code'); // Textarea gốc
+    const runButton = document.getElementById('runButton');
+    const clearButton = document.getElementById('clearButton');
+    const outputArea = document.getElementById('output');
+    const statusMessage = document.getElementById('statusMessage');
+    const runSpinner = document.getElementById('runSpinner');
+    const runButtonText = document.getElementById('runButtonText');
+    const runtimeLink = document.getElementById('runtimeLink');
+
+    const PISTON_API_URL_EXECUTE = 'https://emkc.org/api/v2/piston/execute';
+    const PISTON_API_URL_RUNTIMES = 'https://emkc.org/api/v2/piston/runtimes';
+
+    let availableRuntimes = null;
+    let editor = null; // Biến để giữ instance của CodeMirror
+
+    // --- Hàm hiển thị thông báo ---
+    function showMessage(message, type = 'info', duration = null) {
+        statusMessage.textContent = message;
+        statusMessage.className = type; // Đặt class để CSS xử lý màu sắc
+        statusMessage.style.display = 'block';
+
+        // Tự động ẩn nếu có duration
+        if (duration && typeof duration === 'number') {
+            setTimeout(() => {
+                // Chỉ ẩn nếu nội dung thông báo không thay đổi
+                if (statusMessage.textContent === message) {
+                    statusMessage.style.display = 'none';
+                }
+            }, duration);
+        }
+    }
+
+     // --- Hàm xóa trạng thái và output ---
+    function clearStatusAndOutput() {
+        // Chỉ xóa các thông báo không phải là thông báo đang lấy runtime
+        if (!statusMessage.textContent.startsWith("Đang lấy") && !statusMessage.textContent.startsWith("Lấy danh sách")) {
+             statusMessage.style.display = 'none';
+             statusMessage.textContent = ''; // Xóa hẳn nội dung
+             statusMessage.className = ''; // Xóa class
+        }
+        outputArea.textContent = 'Chưa có kết quả...';
+        outputArea.classList.remove('error-output', 'invalid-version-error');
+    }
+
+
+    // --- Lấy và cache danh sách runtimes ---
+    async function fetchAndCacheRuntimes() {
+        if (availableRuntimes) return availableRuntimes;
+        showMessage("Đang lấy danh sách phiên bản hỗ trợ...", "info");
+        try {
+            const response = await fetch(PISTON_API_URL_RUNTIMES);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const runtimes = await response.json();
+            // Sắp xếp runtimes theo version giảm dần để dễ lấy cái mới nhất
+             runtimes.sort((a, b) => {
+                const verA = (a.version || '0').split('.').map(Number);
+                const verB = (b.version || '0').split('.').map(Number);
+                for (let i = 0; i < Math.max(verA.length, verB.length); i++) {
+                    const numA = verA[i] || 0;
+                    const numB = verB[i] || 0;
+                    if (numA < numB) return 1; // b lớn hơn -> b đứng trước
+                    if (numA > numB) return -1; // a lớn hơn -> a đứng trước
+                }
+                return 0; // Bằng nhau
+             });
+            availableRuntimes = runtimes;
+            console.log("Danh sách Runtimes đã được lấy và sắp xếp:", availableRuntimes);
+            showMessage("Lấy danh sách phiên bản thành công.", "success", 2500); // Tự ẩn sau 2.5s
+            return availableRuntimes;
+        } catch (error) {
+            console.error("Lỗi khi lấy runtimes:", error);
+            showMessage(`Lỗi khi lấy danh sách phiên bản: ${error.message}. Sử dụng phiên bản mặc định (có thể không hoạt động).`, "error");
+            availableRuntimes = []; // Đánh dấu là đã thử nhưng lỗi
+            return [];
+        }
+    }
+
+    // --- Tìm phiên bản hợp lệ mới nhất ---
+    function findLatestVersion(language) {
+        if (!availableRuntimes || availableRuntimes.length === 0) {
+            console.warn(`Không có danh sách runtimes, không thể tìm version cho ${language}`);
+            return null;
+        }
+        // Ưu tiên khớp chính xác language trước, sau đó đến aliases
+        const matchingRuntimes = availableRuntimes.filter(rt =>
+             rt.language === language || (rt.aliases && rt.aliases.includes(language))
+        );
+
+        if (matchingRuntimes.length > 0) {
+            // Do đã sắp xếp giảm dần, phần tử đầu tiên là mới nhất
+            console.log(`Tìm thấy version ${matchingRuntimes[0].version} cho ${language}`);
+            return matchingRuntimes[0].version;
+        }
+        console.warn(`Không tìm thấy runtime nào cho ${language}`);
+        return null;
+    }
+
+    // --- Cập nhật code mẫu và mode editor ---
+    function updateSampleCodeAndMode() {
+        const selectedLang = languageSelect.value;
+        let sampleCode = '';
+        let editorMode = 'text/x-c++src'; // Mặc định là C++
+
+        // Lấy version (chỉ để hiển thị trong code mẫu)
+        const version = findLatestVersion(selectedLang) || 'sẽ tự động tìm';
+
+        if (selectedLang === 'c') {
+            sampleCode = `#include <stdio.h>\n\nint main() {\n    /* Code C của bạn ở đây */\n    printf("Xin chào từ C (runtime: ${version})!\\n");\n    return 0;\n}`;
+            editorMode = 'text/x-csrc';
+        } else { // cpp
+            sampleCode = `#include <iostream>\n#include <string>\n\nint main() {\n    /* Code C++ của bạn ở đây */\n    std::string msg = "Xin chào từ C++";\n    std::cout << msg << " (runtime: ${version})!" << std::endl;\n    int a = 15, b = 27;\n    std::cout << a << " + " << b << " = " << (a + b) << std::endl;\n    return 0;\n}`;
+            editorMode = 'text/x-c++src';
+        }
+
+        if (editor) {
+            // Chỉ cập nhật nếu editor đang trống hoặc là code mẫu cũ
+            const currentCode = editor.getValue();
+            const isDefaultOrEmpty = currentCode.trim() === '' || currentCode.includes("Xin chào từ C") || currentCode.includes("Xin chào từ C++");
+
+            if(isDefaultOrEmpty) {
+                editor.setValue(sampleCode);
+            }
+            // Luôn cập nhật mode
+            editor.setOption("mode", editorMode);
+             console.log(`Đã đặt mode editor thành: ${editorMode}`);
+             editor.refresh(); // Đảm bảo editor vẽ lại đúng cách sau khi thay đổi mode/nội dung
+        }
+        clearStatusAndOutput(); // Xóa output cũ khi đổi ngôn ngữ
+    }
+
+    // --- Khởi tạo khi trang tải xong ---
+    window.onload = async () => {
+         // Khởi tạo CodeMirror từ textarea gốc
+         editor = CodeMirror.fromTextArea(codeArea, {
+            lineNumbers: true,
+            mode: "text/x-c++src", // Mode ban đầu
+            theme: "dracula",
+            matchBrackets: true,
+            autoCloseBrackets: true,
+            indentUnit: 4,
+            tabSize: 4,
+            indentWithTabs: false,
+            // lineWrapping: true, // Bật nếu muốn tự động xuống dòng
+        });
+
+        // Đảm bảo editor chiếm hết chiều cao container
+        // Element thực sự của editor là editor.getWrapperElement()
+        // Đặt size cho element wrapper này
+        editor.getWrapperElement().style.height = "100%";
+        editor.getWrapperElement().style.flexGrow = "1"; // Đảm bảo nó fill trong flex container
+
+        await fetchAndCacheRuntimes(); // Lấy runtimes trước
+        updateSampleCodeAndMode(); // Cập nhật code mẫu và mode dựa trên select ban đầu
+
+        // Refresh editor sau khi mọi thứ đã ổn định (đôi khi cần thiết)
+        setTimeout(() => {
+            editor.refresh();
+        }, 1);
+    };
+
+    // --- Xử lý sự kiện ---
+    languageSelect.addEventListener('change', updateSampleCodeAndMode);
+
+    // Nút Clear Code
+    clearButton.addEventListener('click', () => {
+        if (editor) {
+            editor.setValue(''); // Xóa nội dung editor
+            editor.focus(); // Đưa con trỏ vào editor
+            showMessage("Đã xóa nội dung code.", "info", 2000); // Thông báo ngắn
+        }
+    });
+
+    // Nút Run Code
+    runButton.addEventListener('click', async () => {
+        if (!editor) {
+            showMessage('Trình soạn thảo chưa sẵn sàng!', 'error');
+            return;
+        }
+        const code = editor.getValue(); // Lấy code từ CodeMirror
+        const language = languageSelect.value;
+
+        if (!code.trim()) {
+            showMessage('Vui lòng nhập code trước khi chạy.', 'error');
+            editor.focus();
+            return;
+        }
+
+        // --- Bắt đầu trạng thái chạy ---
+        runButton.disabled = true;
+        clearButton.disabled = true; // Vô hiệu hóa cả nút Clear
+        runButton.classList.add('running');
+        runButtonText.textContent = 'Đang chạy...';
+        clearStatusAndOutput(); // Xóa output cũ và thông báo (trừ thông báo runtime nếu còn)
+        outputArea.textContent = `Đang tìm phiên bản ${language} hợp lệ...`;
+        // ---
+
+        // Đảm bảo đã lấy runtimes (thường đã có từ onload)
+        await fetchAndCacheRuntimes();
+
+        const version = findLatestVersion(language);
+
+        if (!version) {
+            const errorMsg = `Không tìm thấy phiên bản hợp lệ nào cho '${language}' từ Piston API. Không thể chạy code.`;
+            showMessage(errorMsg, 'error');
+            outputArea.textContent = `Lỗi: Không tìm thấy phiên bản '${language}' nào đang hoạt động trên Piston API.\nHãy thử kiểm tra lại link 'Xem Runtimes Hỗ Trợ'.`;
+            outputArea.classList.add('error-output', 'invalid-version-error');
+            // Dừng trạng thái chạy (trong trường hợp lỗi này)
+             runButton.disabled = false;
+             clearButton.disabled = false;
+             runButton.classList.remove('running');
+             runButtonText.textContent = 'Run Code';
+            return;
+        }
+
+        outputArea.textContent = `Đang gửi code ${language} (phiên bản ${version}) đến Piston API...`;
+
+        try {
+            const response = await fetch(PISTON_API_URL_EXECUTE, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    language: language,
+                    version: version,
+                    files: [{ content: code }],
+                    // stdin: "", // Có thể thêm input nếu cần
+                    // args: [], // Có thể thêm đối số dòng lệnh nếu cần
+                })
+            });
+
+            const responseText = await response.text(); // Lấy text trước để parse an toàn
+
+            if (!response.ok) {
+                 let errorDetail = `Mã lỗi HTTP: ${response.status}`;
+                 let isStillInvalidVersion = false;
+                 let apiMessage = response.statusText; // Mặc định
+
+                 try {
+                     const errorJson = JSON.parse(responseText);
+                     apiMessage = errorJson.message || apiMessage;
+                     if (apiMessage && typeof apiMessage === 'string' && apiMessage.toLowerCase().includes("runtime is unknown")) {
+                         isStillInvalidVersion = true;
+                     }
+                 } catch (e) {
+                     // responseText không phải JSON hợp lệ
+                      if (typeof responseText === 'string' && responseText.toLowerCase().includes("runtime is unknown")) {
+                         isStillInvalidVersion = true;
+                     }
+                     apiMessage += `. Phản hồi không phải JSON: ${responseText.substring(0, 100)}...`; // Hiển thị một phần nếu không phải JSON
+                 }
+
+                 errorDetail += ` - ${apiMessage}`;
+
+                 if (isStillInvalidVersion) {
+                      errorDetail += `\n\n>>> LỖI KHÔNG MONG MUỐN <<<\nDù đã tự động tìm thấy phiên bản '${version}' cho '${language}', Piston API vẫn báo phiên bản này không hợp lệ.\nCó thể API đang gặp sự cố hoặc phiên bản vừa bị gỡ bỏ.\nHãy thử lại sau hoặc kiểm tra lại link 'Xem Runtimes Hỗ Trợ'.`;
+                      outputArea.classList.add('invalid-version-error');
+                      availableRuntimes = null; // Xóa cache runtimes để thử lấy lại lần sau
+                      // Fetch lại runtimes ngay lập tức để thử cập nhật
+                      fetchAndCacheRuntimes();
+                 }
+
+                 throw new Error(`Lỗi kết nối hoặc yêu cầu không hợp lệ tới Piston API.\n${errorDetail}`);
+            }
+
+            // Nếu thành công, xóa class lỗi version (nếu có từ lần chạy trước)
+            outputArea.classList.remove('invalid-version-error');
+
+            const result = JSON.parse(responseText);
+            console.log("Kết quả từ Piston API:", result); // Log để debug
+
+            let finalOutput = "";
+            let hasError = false;
+
+            // Xử lý output/error từ Compile (nếu có)
+             if (result.compile) {
+                if (result.compile.stdout) {
+                     finalOutput += "--- Compile Output ---\n";
+                     finalOutput += result.compile.stdout.trim() + "\n\n";
+                 }
+                 if (result.compile.stderr) {
+                     finalOutput += "--- Lỗi Biên Dịch (Compile Error) ---\n";
+                     finalOutput += result.compile.stderr.trim() + "\n\n";
+                     hasError = true;
+                 }
+             } else {
+                 console.log("Không có thông tin 'compile' trong kết quả.");
+             }
+
+
+            // Xử lý output/error từ Run
+            if (result.run) {
+                if (result.run.stdout || result.run.stdout === "") { // stdout có thể là chuỗi rỗng
+                     finalOutput += (finalOutput.length > 0 && !hasError) ? "--- Output ---\n" : ""; // Thêm header chỉ khi có compile output và không có lỗi compile
+                     finalOutput += result.run.stdout.trim() || (hasError ? "" : "(Chương trình chạy thành công nhưng không có output)");
+                }
+                 if (result.run.stderr) {
+                     finalOutput += (finalOutput.length > 0 ? "\n\n" : "") + "--- Lỗi Runtime (Runtime Error) ---\n";
+                     finalOutput += result.run.stderr.trim();
+                     hasError = true;
+                 }
+                 if(result.run.signal) {
+                     finalOutput += `\n--- Chương trình kết thúc bởi tín hiệu: ${result.run.signal} (Code: ${result.run.code}) ---`;
+                     hasError = true;
+                 }
+            } else if (!hasError) {
+                finalOutput += "Phản hồi từ API không chứa kết quả thực thi ('run').";
+            }
+
+             outputArea.textContent = finalOutput.trim() || "(Không có output nào được ghi nhận)"; // Đảm bảo luôn có gì đó hiển thị
+
+            if (hasError) {
+                outputArea.classList.add('error-output');
+                showMessage('Có lỗi xảy ra trong quá trình biên dịch hoặc chạy.', 'error');
+            } else {
+                outputArea.classList.remove('error-output');
+                showMessage('Chương trình đã chạy xong.', 'success', 3000); // Tự ẩn sau 3s
+            }
+
+        } catch (error) {
+            console.error('Lỗi trong quá trình chạy code:', error);
+            // Không ghi đè nếu là lỗi invalid-version đã được xử lý đặc biệt ở trên
+            if (!outputArea.classList.contains('invalid-version-error')) {
+                 outputArea.textContent = `Đã xảy ra lỗi:\n\n${error.message}`;
+                 outputArea.classList.add('error-output');
+             }
+            showMessage('Không thể hoàn thành yêu cầu. Kiểm tra output để biết chi tiết.', 'error');
+        } finally {
+            // --- Dừng trạng thái chạy ---
+            runButton.disabled = false;
+            clearButton.disabled = false; // Kích hoạt lại nút Clear
+            runButton.classList.remove('running');
+            runButtonText.textContent = 'Run Code'; // Đặt lại tên nút
+            // ---
+        }
+    });
+
+</script>
+
+</body>
+</html>
