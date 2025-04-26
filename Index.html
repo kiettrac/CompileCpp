@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Chạy C++ Online - Powered by Paiza.io</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 20px;
+            background-color: #f0f2f5;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        textarea {
+            width: 100%;
+            height: 300px;
+            font-family: monospace;
+            font-size: 16px;
+            padding: 10px;
+            margin-top: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            resize: vertical;
+            background: #fff;
+        }
+        button {
+            display: block;
+            margin: 20px auto 10px auto;
+            padding: 10px 25px;
+            font-size: 16px;
+            background-color: #28a745;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        pre {
+            background-color: #333;
+            color: #0f0;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            min-height: 150px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Trình biên dịch C++ Online</h1>
+
+    <textarea id="code" placeholder="Nhập code C++ vào đây..."></textarea>
+
+    <button onclick="runCode()">Chạy Code</button>
+
+    <h2>Kết quả:</h2>
+    <pre id="output">Chưa chạy chương trình...</pre>
+
+    <script>
+        async function runCode() {
+            const code = document.getElementById('code').value.trim();
+            if (code === "") {
+                document.getElementById('output').innerText = "Vui lòng nhập code!";
+                return;
+            }
+
+            document.getElementById('output').innerText = "Đang gửi code tới server, vui lòng chờ...";
+
+            try {
+                const response = await fetch('https://api.paiza.io/runners/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        source_code: code,
+                        language: 'cpp',
+                        api_key: 'guest'
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.id) {
+                    checkStatus(data.id);
+                } else {
+                    document.getElementById('output').innerText = "Không gửi được code!";
+                }
+            } catch (err) {
+                document.getElementById('output').innerText = "Không thể kết nối đến server!";
+            }
+        }
+
+        async function checkStatus(id) {
+            try {
+                const res = await fetch(`https://api.paiza.io/runners/get_details?id=${id}&api_key=guest`);
+                const result = await res.json();
+
+                if (result.status === 'completed') {
+                    if (result.stderr) {
+                        document.getElementById('output').innerText = "Lỗi chương trình:\n\n" + result.stderr;
+                    } else {
+                        document.getElementById('output').innerText = "Kết quả:\n\n" + result.stdout;
+                    }
+                } else {
+                    document.getElementById('output').innerText = "Đang biên dịch...";
+                    setTimeout(() => checkStatus(id), 1000);
+                }
+            } catch (e) {
+                document.getElementById('output').innerText = "Lỗi trong khi lấy kết quả!";
+            }
+        }
+    </script>
+
+</body>
+</html>
